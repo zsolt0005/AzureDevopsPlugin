@@ -1,5 +1,4 @@
 .gradle
-build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -19,3 +18,16 @@ out/
 
 ### Fleet ###
 .fleet
+
+### Build ###
+build/classes
+build/idea-sandbox
+build/instrumented
+build/kotlin
+build/libs
+build/libsSearchableOptions
+build/patchedPluginXmlFiles
+build/resources
+build/searchableOptions
+build/snapshot
+build/tmp
