@@ -1,0 +1,66 @@
+<idea-plugin>
+    <id>com.sportisimo.devops.AzureDevOpsIntegration</id>
+    <name>Azure DevOps Integration</name>
+    <vendor email="zsolt.dome@sportisimo.cz" url="https://www.sportisimo.com">Sportisimo</vendor>
+
+    <description><![CDATA[
+        Some template text just to satisfy the editors error reporting
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <editorFactoryListener implementation="sportisimo.idea.PostStartup" />
+
+        <!-- App state manager -->
+        <applicationService serviceImplementation="sportisimo.states.AppSettingsState"/>
+        <applicationService serviceImplementation="sportisimo.states.ApplicationCache"/>
+
+        <!-- Project state manager -->
+        <projectService serviceImplementation="sportisimo.states.ProjectDataState"/>
+        <projectService serviceImplementation="sportisimo.states.ProjectCache"/>
+
+        <!-- Settings page -->
+        <applicationConfigurable
+                parentId="other"
+                instance="sportisimo.ui.SettingsPage"
+                id="sportisimo.ui.SettingsPage"
+                displayName="Azure DevOps Integration"/>
+
+        <!-- Azure DevOps Tool Window -->
+        <toolWindow
+                factoryClass="sportisimo.ui.DevOpsToolWindowFactory"
+                icon="CustomIcons.AzureDevOps"
+                anchor="right"
+                id="Azure DevOps" />
+
+        <!-- NOTIFICATIONS -->
+        <notificationGroup
+                id="Azure DevOps Integration STICKY"
+                displayType="STICKY_BALLOON"/>
+        <notificationGroup
+                id="Azure DevOps Integration"
+                displayType="BALLOON"/>
+
+        <!-- SERVICES -->
+        <applicationService serviceImplementation="sportisimo.services.PullRequestThreadService" />
+        <applicationService serviceImplementation="sportisimo.services.DataLoaderService" />
+
+        <projectService serviceImplementation="sportisimo.services.DataProviderService" />
+    </extensions>
+
+    <!-- ACTIONS -->
+    <actions>
+        <action
+                id="NewPullRequestThread"
+                text="Devops: New Comment"
+                class="sportisimo.idea.actions.NewPullRequestThreadAction">
+            <add-to-group group-id="EditorPopupMenu" />
+            <add-to-group group-id="EditorGutterPopupMenu" />
+            <add-to-group group-id="Diff.EditorPopupMenu" />
+            <add-to-group group-id="Diff.EditorGutterPopupMenu" />
+        </action>
+    </actions>
+</idea-plugin>
