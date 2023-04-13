@@ -46,7 +46,6 @@
 
         <!-- SERVICES -->
         <applicationService serviceImplementation="sportisimo.services.PullRequestThreadService" />
-        <applicationService serviceImplementation="sportisimo.services.DataLoaderService" />
 
         <projectService serviceImplementation="sportisimo.services.DataProviderService" />
     </extensions>

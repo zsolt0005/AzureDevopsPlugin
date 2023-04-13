@@ -18,6 +18,7 @@ import sportisimo.events.listeners.IOnPullRequestThreadsLoadedListener
 import sportisimo.exceptions.PullRequestException
 import sportisimo.services.DataProviderService
 import sportisimo.states.AppSettingsState
+import sportisimo.states.ProjectDataState
 import sportisimo.ui.ThreadWindow
 import sportisimo.utils.FileUtils
 import java.awt.Color
@@ -32,7 +33,6 @@ object EditorCommentsManager
     {
         val project = event.editor.project ?: return
         val file = FileUtils.getFileByEditor(event.editor) ?: return
-        val service = project.service<DataProviderService>()
 
         val path = FileUtils.getFilePathFromFile(file, project)
 
@@ -44,6 +44,11 @@ object EditorCommentsManager
                 onCommentsLoaded(project, event.editor, fileComments, file)
             }
         })
+
+        val cachedData = ProjectDataState.getInstance(project)
+        if(cachedData.connectionData == null) return
+
+        val service = project.service<DataProviderService>()
 
         try
         {
@@ -58,9 +63,8 @@ object EditorCommentsManager
 
     fun closed(event: EditorFactoryEvent)
     {
-        if(event.editor.project == null) return
-
-        Events.unSubscribe(event.editor.project!!, event.editor, Events.ON_PULL_REQUEST_COMMENTS_LOADED)
+        val project = event.editor.project ?: return
+        Events.unSubscribe(project, event.editor, Events.ON_PULL_REQUEST_COMMENTS_LOADED)
     }
 
     private fun onCommentsLoaded(
@@ -106,8 +110,11 @@ object EditorCommentsManager
 
                 val firstComment = thread.comments.first()
 
+                // Devops returns Int.MAX_VALUE if the comment line changes between iterations
                 val startOffset = editor.document.getLineStartOffset(range.startLine - 1) + range.startOffset - 1
-                val endOffset = editor.document.getLineStartOffset(range.endLine - 1) + range.endOffset - 1
+                val endOffset =
+                    if(range.endOffset == Int.MAX_VALUE) editor.document.getLineEndOffset(range.endLine - 1)
+                    else editor.document.getLineStartOffset(range.endLine - 1) + range.endOffset - 1
 
                 val attributes =
                     if(thread.isActive())

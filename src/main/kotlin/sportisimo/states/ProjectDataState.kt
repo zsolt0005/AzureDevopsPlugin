@@ -13,7 +13,7 @@ import sportisimo.data.azure.RepositoryData
 import sportisimo.data.azure.RepositoryRefData
 import sportisimo.data.converters.DataConverters
 
-@State(name = "com.sportisimo.devops.DevOpsToolWindow", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+@State(name = "com.sportisimo.devops.DevOpsToolWindow", storages = [Storage(StoragePathMacros.CACHE_FILE)])
 class ProjectDataState: PersistentStateComponent<ProjectDataState>
 {
     @OptionTag(converter = DataConverters.IdentityDataConverter::class)
@@ -40,7 +40,8 @@ class ProjectDataState: PersistentStateComponent<ProjectDataState>
     @OptionTag(converter = DataConverters.ProjectTeamsDataConverter::class)
     var projectTeams: ProjectTeamsData? = null
 
-    @Transient var lastOpenedPullRequest: LastOpenedPullRequestData? = null
+    @OptionTag(converter = DataConverters.LastOpenedPullRequestDataConverter::class)
+    var lastOpenedPullRequest: LastOpenedPullRequestData = LastOpenedPullRequestData()
 
     var selectedManually: Boolean = false
 
@@ -54,9 +55,10 @@ class ProjectDataState: PersistentStateComponent<ProjectDataState>
         workItemTypes = null
         pullRequests = null
         projectTeams = null
-        lastOpenedPullRequest = null
+        lastOpenedPullRequest = LastOpenedPullRequestData()
         selectedManually = false
     }
+
     override fun getState() = this
 
     override fun loadState(state: ProjectDataState) = XmlSerializerUtil.copyBean(state, this)

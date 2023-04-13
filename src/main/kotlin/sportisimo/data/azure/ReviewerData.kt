@@ -16,10 +16,13 @@ data class ReviewerData(
     val id: String,
     val uniqueName: String,
     val imageUrl: String,
-    val isRequired: Boolean = false,
-    @Transient override var asyncImageIcon: Future<Icon>? = null
+    val isRequired: Boolean = false
 ): AAsyncImageData()
 {
+    @Transient var asyncImageIcon: Future<Icon>? = null
+
+    override fun getAsyncIcon(): Future<Icon>? = asyncImageIcon
+
     fun getVoteIcon(): Icon
     {
         return when(vote)

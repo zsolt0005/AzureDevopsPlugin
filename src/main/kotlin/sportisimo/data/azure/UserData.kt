@@ -11,6 +11,10 @@ data class UserData(
     val uniqueName: String,
     val imageUrl: String,
     val descriptor: String,
-    @SerializedName("_links") val links: CreatorLinksData,
-    @Transient override var asyncImageIcon: Future<Icon>? = null
+    @SerializedName("_links") val links: CreatorLinksData
 ): AAsyncImageData()
+{
+    @Transient var asyncImageIcon: Future<Icon>? = null
+
+    override fun getAsyncIcon(): Future<Icon>? = asyncImageIcon
+}

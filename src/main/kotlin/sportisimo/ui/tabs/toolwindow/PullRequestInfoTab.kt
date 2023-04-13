@@ -101,17 +101,14 @@ class PullRequestInfoTab(
         Events.subscribe(project, "PullRequestInfoTab", Events.ON_PULL_REQUESTS_LOADED, object: IOnPullRequestsLoadedListener {
             override fun onChange(pullRequests: List<PullRequestData>)
             {
-                onPullRequestsLoaded(pullRequests)
+                onPullRequestsLoaded()
             }
         })
     }
 
-    private fun onPullRequestsLoaded(pullRequests: List<PullRequestData>)
+    private fun onPullRequestsLoaded()
     {
-        val pullRequest = pullRequests.find {
-            it.pullRequestId == cachedData.lastOpenedPullRequest!!.pullRequest.pullRequestId
-        }
-
+        val pullRequest = service.getPullRequest()
         if (pullRequest == null)
         {
             PullRequestToolWindowFactory.removeIfExists(project)

@@ -11,6 +11,10 @@ data class IdentityData(
     val isActive: Boolean,
     val properties: IdentityPropertiesData,
     val resourceVersion: Int,
-    val metaTypeId: Int,
-    @Transient override var asyncImageIcon: Future<Icon>? = null
+    val metaTypeId: Int
 ): AAsyncImageData()
+{
+    @Transient var asyncImageIcon: Future<Icon>? = null
+
+    override fun getAsyncIcon(): Future<Icon>? = asyncImageIcon
+}

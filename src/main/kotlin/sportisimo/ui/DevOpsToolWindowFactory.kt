@@ -27,6 +27,7 @@ import sportisimo.exceptions.AbortException
 import sportisimo.exceptions.NotFoundException
 import sportisimo.services.DataProviderService
 import sportisimo.states.AppSettingsState
+import sportisimo.states.ApplicationCache
 import sportisimo.states.ProjectCache
 import sportisimo.states.ProjectDataState
 import sportisimo.threading.FutureNotice
@@ -42,12 +43,14 @@ class DevOpsToolWindowFactory: ToolWindowFactory
     private val threadingManager = ThreadingManager()
     private lateinit var cachedData: ProjectDataState
     private lateinit var projectCache: ProjectCache
+    private lateinit var applicationCache: ApplicationCache
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow)
     {
         DumbService.getInstance(project).runWhenSmart {
             cachedData = ProjectDataState.getInstance(project)
             projectCache = ProjectCache.getInstance(project)
+            applicationCache = ApplicationCache.getInstance()
             ToolWindowContentUtils.createLoadingWindow(toolWindow)
             setupToolWindow(project, toolWindow)
         }
@@ -106,6 +109,7 @@ class DevOpsToolWindowFactory: ToolWindowFactory
 
                 cachedData.clearData()
                 projectCache.clearData()
+                applicationCache.clearData()
 
                 PullRequestToolWindowFactory.removeIfExists(project)
                 loadSettings(project, toolWindow)

@@ -11,7 +11,12 @@ import sportisimo.data.AvatarIcons
 @State(name = "com.sportisimo.devops.ApplicationCache", storages = [Storage(StoragePathMacros.CACHE_FILE)])
 class ApplicationCache: PersistentStateComponent<ApplicationCache>
 {
-    val avatarIcons = AvatarIcons()
+    var avatarIcons = AvatarIcons()
+
+    fun clearData()
+    {
+        avatarIcons = AvatarIcons()
+    }
 
     override fun getState() = this
 

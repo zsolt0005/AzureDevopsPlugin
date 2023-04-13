@@ -12,7 +12,7 @@ import javax.swing.ImageIcon
 
 abstract class AAsyncImageData
 {
-    open var asyncImageIcon: Future<Icon>? = null
+    abstract fun getAsyncIcon(): Future<Icon>?
 
     fun getImageIconAsync(options: AvatarIconOptionsData? = null): Future<Icon> = ApplicationManager.getApplication().executeOnPooledThread(Callable {
         return@Callable getImageIcon(options)
@@ -20,9 +20,9 @@ abstract class AAsyncImageData
 
     fun getImageIcon(options: AvatarIconOptionsData? = null): Icon
     {
-        if (asyncImageIcon == null) return AllIcons.Actions.Stub
+        if (getAsyncIcon() == null) return AllIcons.Actions.Stub
 
-        val icon = FutureNotice(asyncImageIcon!!).awaitCompletionAndGetResult()!!
+        val icon = FutureNotice(getAsyncIcon()!!).awaitCompletionAndGetResult()!!
 
         if(options != null)
         {

@@ -79,14 +79,15 @@ object DevOpsHelper
     /**
      * Checks if the saved connection still exists in the connections list.
      *
-     * @param saveData
+     * @param cacheData
      * @return true if still exists, false otherwise.
      */
-    fun connectionStillExists(saveData: ProjectDataState): Boolean
+    fun connectionStillExists(cacheData: ProjectDataState): Boolean
     {
         return settings.azureConnections.connections.any {
-            it.organization == saveData.connectionData?.organization
-         && it.project.id == saveData.connectionData?.project?.id
+            cacheData.connectionData != null
+         && it.organization == cacheData.connectionData?.organization
+         && it.project.id == cacheData.connectionData?.project?.id
         }
     }
 }

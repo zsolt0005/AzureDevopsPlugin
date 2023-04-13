@@ -19,6 +19,7 @@ import sportisimo.ui.elements.ListPanel
 import sportisimo.ui.elements.adapters.AListPanelAdapter
 import sportisimo.ui.elements.adapters.ListPanelStringAdapter
 import sportisimo.utils.EventUtils
+import sportisimo.utils.UIUtils
 import java.awt.Color
 import java.awt.Component
 import java.awt.Font
@@ -92,7 +93,7 @@ class ColumnBuilder
     fun expandableTextArea(gap: HorizontalGap = HorizontalGap(0, 0), onUpdated: (DocumentEvent) -> Unit): JBTextArea
     {
         val textArea = JBTextArea().apply {
-            border = JBUI.Borders.customLine(JBColor.border())
+            border = JBEmptyBorder(3, 5, 3, 5)
             font = JBFont.regular()
             lineWrap = true
             wrapStyleWord = true
@@ -103,7 +104,11 @@ class ColumnBuilder
             onUpdated(it)
         })
 
-        add(textArea, gap)
+        val wrapper = UIUtils.createPanelWithBorderLayout(textArea).apply {
+            border = JBUI.Borders.customLine(JBColor.border())
+        }
+
+        add(wrapper, gap)
         return textArea
     }
 

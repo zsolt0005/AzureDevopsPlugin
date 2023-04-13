@@ -1,6 +1,5 @@
 package sportisimo.services
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.util.BackgroundTaskUtil
 import com.intellij.openapi.project.Project
 import sportisimo.azure.Connection
@@ -9,29 +8,29 @@ import sportisimo.data.ProjectTeamsData
 import sportisimo.data.PullRequestsData
 import sportisimo.data.WorkItemTypesData
 import sportisimo.data.azure.*
-import sportisimo.data.azure.client.SubjectQuerySearchData
-import sportisimo.data.azure.client.WorkItemSearchData
+import sportisimo.data.azure.client.*
 import sportisimo.data.ui.AvatarIconOptionsData
 import sportisimo.events.Events
 import sportisimo.exceptions.NotFoundException
 import sportisimo.exceptions.PullRequestException
+import sportisimo.states.AppSettingsState
 import sportisimo.states.ApplicationCache
 import sportisimo.states.ProjectCache
 import sportisimo.states.ProjectDataState
-import sportisimo.threading.FutureNotice
 import sportisimo.threading.ThreadingManager
 import sportisimo.utils.ImageUtils
+import sportisimo.utils.StringUtils
 import java.awt.image.BufferedImage
 import javax.swing.Icon
 import javax.swing.ImageIcon
 
 class DataProviderService(private val project: Project)
 {
+    private val settings = AppSettingsState.getInstance()
     private val cachedData = ProjectDataState.getInstance(project)
     private val projectCache = ProjectCache.getInstance(project)
     private val applicationCache = ApplicationCache.getInstance()
 
-    private val loaderService: DataLoaderService = service<DataLoaderService>()
     private val connection = Connection(cachedData.connectionData!!)
 
     fun getPullRequests(ignoreCache: Boolean = false): List<PullRequestData>
@@ -42,8 +41,13 @@ class DataProviderService(private val project: Project)
             return cachedData.pullRequests!!.values
         }
 
-        val task = loaderService.loadPullRequestsByRepositoryAndBranch(project, connection, cachedData.repositoryData!!, cachedData.branchData!!).task!!
-        val pullRequests = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val branchData = cachedData.branchData!!
+        val repositoryData = cachedData.repositoryData!!
+        val status = if(settings.pullRequestState.abandonedPullRequests) PullRequestData.STATUS_ALL else PullRequestData.STATUS_ACTIVE
+
+        val pullRequests = connection.gitClient.getPullRequests(repositoryData, status).filter {
+            it.sourceRefName == branchData.name
+        }
 
         pullRequests.forEach {
             it.createdBy.asyncImageIcon = getAvatarAsync(it.createdBy.imageUrl).task!!
@@ -56,10 +60,10 @@ class DataProviderService(private val project: Project)
         }
 
         cachedData.pullRequests = PullRequestsData(pullRequests)
-        if(cachedData.lastOpenedPullRequest != null)
+        if(cachedData.lastOpenedPullRequest.pullRequest != null)
         {
-            val pullRequestToUpdate = pullRequests.find { it.pullRequestId == cachedData.lastOpenedPullRequest!!.pullRequest.pullRequestId }
-            if(pullRequestToUpdate != null) cachedData.lastOpenedPullRequest?.pullRequest = pullRequestToUpdate
+            val pullRequestToUpdate = pullRequests.find { it.pullRequestId == cachedData.lastOpenedPullRequest.pullRequest!!.pullRequestId }
+            if(pullRequestToUpdate != null) cachedData.lastOpenedPullRequest.pullRequest = pullRequestToUpdate
         }
 
         BackgroundTaskUtil.syncPublisher(project, Events.ON_PULL_REQUESTS_LOADED).onChange(pullRequests)
@@ -83,18 +87,24 @@ class DataProviderService(private val project: Project)
 
     fun getPullRequest(): PullRequestData?
     {
-        return cachedData.lastOpenedPullRequest?.pullRequest
+        return cachedData.lastOpenedPullRequest.pullRequest
     }
 
     fun getPullRequestWorkItems(): List<WorkItemData>
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        val task = loaderService.loadPullRequestWorkItems(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest).task!!
-        val workItems = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
+        val pullRequestWorkItems = connection.gitClient.getPullRequestWorkItems(pullRequest)
+
+        val workItems = mutableListOf<WorkItemData>()
+        pullRequestWorkItems.forEach {
+            val workItem = connection.workItemClient.getWorkItem(pullRequest.repository.project, it.id) ?: return@forEach
+            workItems.add(workItem)
+        }
 
         workItems.forEach { workItem ->
             workItem.svgIcon = ""
@@ -126,13 +136,21 @@ class DataProviderService(private val project: Project)
 
     fun getPipelineRun(): BuildRunData?
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        val task = loaderService.loadPipelineRunByPullRequest(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest).task!!
-        val pipelineRun = FutureNotice(task).awaitCompletionAndGetResult()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
+
+        val searchData = BuildRunsSearchData(
+            1,
+            "refs/pull/${pullRequest.pullRequestId}/merge",
+            QueryOrder.QueueTimeDescending
+        )
+
+        val pipelineRuns = connection.buildClient.getRuns(pullRequest.repository.project, searchData)
+        val pipelineRun = if(pipelineRuns.isNotEmpty()) pipelineRuns.first() else null
 
         BackgroundTaskUtil.syncPublisher(project, Events.ON_PULL_REQUEST_PIPELINE_RUN_LOADED).onChange(pipelineRun)
         return pipelineRun
@@ -154,21 +172,26 @@ class DataProviderService(private val project: Project)
 
     fun getTargetBranchCommits(ignoreCache: Boolean = false): List<CommitData>
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        if(!ignoreCache && cachedData.lastOpenedPullRequest?.targetBranchCommits != null)
+        if(!ignoreCache && cachedData.lastOpenedPullRequest.targetBranchCommits != null)
         {
-            BackgroundTaskUtil.syncPublisher(project, Events.ON_PULL_REQUEST_TARGET_BRANCH_COMMITS_LOADED).onChange(cachedData.lastOpenedPullRequest!!.targetBranchCommits!!)
-            return cachedData.lastOpenedPullRequest!!.targetBranchCommits!!
+            BackgroundTaskUtil.syncPublisher(project, Events.ON_PULL_REQUEST_TARGET_BRANCH_COMMITS_LOADED).onChange(
+                cachedData.lastOpenedPullRequest.targetBranchCommits!!)
+            return cachedData.lastOpenedPullRequest.targetBranchCommits!!
         }
 
-        val task = loaderService.loadBranchCommitsByPullRequest(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest).task!!
-        val commits = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
 
-        cachedData.lastOpenedPullRequest!!.targetBranchCommits = commits
+        val commits = connection.gitClient.getBranchCommits(
+            pullRequest.repository,
+            StringUtils.cleanRepositoryRefName(pullRequest.targetRefName)
+        )
+
+        cachedData.lastOpenedPullRequest.targetBranchCommits = commits
         BackgroundTaskUtil.syncPublisher(project, Events.ON_PULL_REQUEST_TARGET_BRANCH_COMMITS_LOADED).onChange(commits)
         return commits
     }
@@ -196,8 +219,7 @@ class DataProviderService(private val project: Project)
             return cachedData.projectTeams!!.values
         }
 
-        val task = loaderService.loadProjectTeams(project, connection, cachedData.connectionData!!.project).task!!
-        val teams = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val teams = connection.coreClient.getProjectTeams(cachedData.connectionData!!.project)
 
         cachedData.projectTeams = ProjectTeamsData(teams)
         BackgroundTaskUtil.syncPublisher(project, Events.ON_PROJECT_TEAMS_LOADED).onChange(teams)
@@ -224,6 +246,11 @@ class DataProviderService(private val project: Project)
         version: String
     ): GitItemData?
     {
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
+        {
+            throw PullRequestException("Failed to load the opened pull request")
+        }
+
         val cachedFile = projectCache.gitItems.values.firstOrNull {
             it.path == path && it.commitId == version
         }
@@ -233,8 +260,15 @@ class DataProviderService(private val project: Project)
             return cachedFile
         }
 
-        val task = loaderService.loadGitItemByPathAndVersion(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest.repository, path, version).task!!
-        val item = FutureNotice(task).awaitCompletionAndGetResult() ?: return null
+        val searchData = GitItemsSearchData(
+            path,
+            true,
+            version,
+            GitItemVersionType.Commit
+        )
+
+        val repository = cachedData.lastOpenedPullRequest.pullRequest!!.repository
+        val item = connection.gitClient.getItem(repository, searchData) ?: return null
 
         projectCache.gitItems.values.add(item)
         return item
@@ -258,20 +292,20 @@ class DataProviderService(private val project: Project)
 
     fun getPullRequestIterations(ignoreCache: Boolean = false): List<PullRequestIterationData>
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        if(!ignoreCache && cachedData.lastOpenedPullRequest!!.iterations != null)
+        if(!ignoreCache && cachedData.lastOpenedPullRequest.iterations != null)
         {
-            return cachedData.lastOpenedPullRequest!!.iterations!!
+            return cachedData.lastOpenedPullRequest.iterations!!
         }
 
-        val task = loaderService.loadPullRequestIterations(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest).task!!
-        val iterations = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
+        val iterations = connection.gitClient.getPullRequestIterations(pullRequest.repository, pullRequest)
 
-        cachedData.lastOpenedPullRequest!!.iterations = iterations
+        cachedData.lastOpenedPullRequest.iterations = iterations
         return iterations
     }
 
@@ -297,8 +331,7 @@ class DataProviderService(private val project: Project)
             return cachedData.currentUser!!
         }
 
-        val task = loaderService.loadCurrentUser(project, connection).task!!
-        val currentUser = FutureNotice(task).awaitCompletionAndGetResult() ?: throw NotFoundException("Current user wah not found")
+        val currentUser = connection.commonClient.getAuthenticatedUserInformation() ?: throw NotFoundException("Current user wah not found")
 
         currentUser.asyncImageIcon = getAvatarAsync(currentUser.subjectDescriptor, "large").task!!
 
@@ -323,13 +356,15 @@ class DataProviderService(private val project: Project)
 
     fun getPullRequestThreads(lastIteration: PullRequestIterationData): List<PullRequestThreadData>
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        val task = loaderService.loadPullRequestThreads(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest, lastIteration).task!!
-        val threads = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
+
+        val options = PullRequestThreadOptionsData(lastIteration.id, 0)
+        val threads = connection.gitClient.getPullRequestThreads(pullRequest.repository, pullRequest, options)
 
         val filteredThreads = threads.filter {
             it.threadContext != null
@@ -364,13 +399,15 @@ class DataProviderService(private val project: Project)
 
     fun getPullRequestIterationsComparison(iteration: PullRequestIterationData): List<PullRequestIterationChangeData>
     {
-        if(cachedData.lastOpenedPullRequest == null)
+        if(cachedData.lastOpenedPullRequest.pullRequest == null)
         {
             throw PullRequestException("Failed to load the opened pull request")
         }
 
-        val task = loaderService.loadPullRequestIterationsComparison(project, connection, cachedData.lastOpenedPullRequest!!.pullRequest, iteration).task!!
-        return FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val pullRequest = cachedData.lastOpenedPullRequest.pullRequest!!
+
+        val searchData = CompareIterationsSearchData(0, 2000, 0)
+        return connection.gitClient.compareIterations(pullRequest.repository, pullRequest, iteration, searchData)
     }
 
     fun getPullRequestIterationsComparisonAsync(
@@ -395,8 +432,7 @@ class DataProviderService(private val project: Project)
             return cachedData.workItemTypes!!.values
         }
 
-        val task = loaderService.loadWorkItemTypes(project, connection, cachedData.connectionData!!.project).task!!
-        val workItemTypes = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val workItemTypes = connection.workItemClient.getWorkItemTypes(cachedData.connectionData!!.project)
 
         cachedData.workItemTypes = WorkItemTypesData(workItemTypes)
         return workItemTypes
@@ -419,8 +455,7 @@ class DataProviderService(private val project: Project)
 
     fun getWorkItems(searchData: WorkItemSearchData, ignoreCache: Boolean = false): List<WorkItemSearchResultData>
     {
-        val task = loaderService.loadWorkItems(project, connection, cachedData.connectionData!!.project, searchData).task!!
-        val workItems = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val workItems = connection.searchClient.searchWorkItems(cachedData.connectionData!!.project, searchData)
 
         var workItemTypes: List<WorkItemTypeData> = listOf()
         runCatching { workItemTypes = getWorkItemTypes(ignoreCache) }
@@ -454,8 +489,7 @@ class DataProviderService(private val project: Project)
 
     fun getUsers(searchData: SubjectQuerySearchData, ignoreCache: Boolean = false): List<SubjectQueryResultData>
     {
-        val task = loaderService.loadUsers(project, connection, searchData).task!!
-        val users = FutureNotice(task).awaitCompletionAndGetResult() ?: listOf()
+        val users = connection.graphClient.searchUsers(searchData)
 
         users.forEach {
             it.avatar = getAvatarAsync(it.descriptor, "large", ignoreCache = ignoreCache).task!!

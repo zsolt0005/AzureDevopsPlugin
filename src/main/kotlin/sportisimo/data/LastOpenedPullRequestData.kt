@@ -5,7 +5,7 @@ import sportisimo.data.azure.PullRequestData
 import sportisimo.data.azure.PullRequestIterationData
 
 data class LastOpenedPullRequestData(
-    var pullRequest: PullRequestData,
-    var targetBranchCommits: List<CommitData>? = null,
-    var iterations: List<PullRequestIterationData>? = null
+    @Transient var pullRequest: PullRequestData? = null,
+    @Transient var targetBranchCommits: List<CommitData>? = null,
+    @Transient var iterations: List<PullRequestIterationData>? = null
 )

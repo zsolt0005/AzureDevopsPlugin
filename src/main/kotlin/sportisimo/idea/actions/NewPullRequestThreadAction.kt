@@ -7,12 +7,14 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import sportisimo.data.azure.PullRequestData
 import sportisimo.data.azure.ThreadContextData
 import sportisimo.data.azure.ThreadContextPositionData
 import sportisimo.data.azure.client.NewThreadData
 import sportisimo.services.DataProviderService
+import sportisimo.states.ProjectDataState
 import sportisimo.threading.ThreadingManager
 import sportisimo.ui.NewThreadWindow
 import sportisimo.utils.FileUtils
@@ -21,15 +23,19 @@ class NewPullRequestThreadAction: AnAction()
 {
     override fun update(e: AnActionEvent)
     {
-        val project = e.project ?: return
-        val service = project.service<DataProviderService>()
-
         e.presentation.isEnabled = false
+        val project = e.project ?: return
 
-        val pullRequest = service.getPullRequest()
-        if(pullRequest != null)
-        {
-            e.presentation.isEnabled = true
+        val cachedData = ProjectDataState.getInstance(project)
+        if(cachedData.connectionData == null) return
+
+        DumbService.getInstance(project).runWhenSmart {
+            val service = project.service<DataProviderService>()
+            val pullRequest = service.getPullRequest()
+            if(pullRequest != null)
+            {
+                e.presentation.isEnabled = true
+            }
         }
     }
 
@@ -38,11 +44,16 @@ class NewPullRequestThreadAction: AnAction()
     override fun actionPerformed(e: AnActionEvent)
     {
         val project = e.project ?: return
-        val editor = e.getData(CommonDataKeys.EDITOR) ?: return
-        val service = project.service<DataProviderService>()
+        val cachedData = ProjectDataState.getInstance(project)
+        if(cachedData.connectionData == null) return
 
-        val pullRequest = service.getPullRequest() ?: return
-        openNewThreadWindow(project, editor, pullRequest)
+        DumbService.getInstance(project).runWhenSmart {
+            val editor = e.getData(CommonDataKeys.EDITOR) ?: return@runWhenSmart
+            val service = project.service<DataProviderService>()
+
+            val pullRequest = service.getPullRequest() ?: return@runWhenSmart
+            openNewThreadWindow(project, editor, pullRequest)
+        }
     }
 
     private fun openNewThreadWindow(project: Project, editor: Editor, pullRequest: PullRequestData)

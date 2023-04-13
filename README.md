@@ -3,10 +3,13 @@
 ### Next alpha version: 1.13
 
 ## Bugs
-  * Show threads without thread context too
-  * Comment reply UI is broken
-  * Reply text area should have padding
-  * Why settings are not saved
+  * [X] Show threads without thread context too
+  * [X] Comment reply UI is broken
+  * [O] Reply text area should have padding
+  * [?] Why settings are not saved
+  * [O] NullPointerException
+  * [?] AddNewThread can be opened with shortcuts ?
+  * [O] Offset out of bounds
 
 ## Plans
   * **1.13 - Improvements**
@@ -47,6 +50,5 @@
     * Each click on the icon of the commenter in the editor opens a new instance of the ThreadWindow
         * Should be limited to 1 window / thread
     * If a diff view is open, and opens the same diff, do not open another one, just focus the old one
-
-### Clean code
-  * Resolve all the TODOS
+    * Resolve all the TODOS
+  
